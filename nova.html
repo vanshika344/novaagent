@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nova Chat</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({startOnLoad:false, theme:'dark'});</script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    </script>
     <style>
         :root {
             --navy-dark: #060918;
@@ -123,6 +125,14 @@
             margin-top:6px; font-size:12px; color:var(--lavender); opacity:0.7;
         }
 
+        .mermaid-diagram {
+            margin: 10px 0;
+            padding: 10px;
+            background: var(--nova-bubble);
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+        }
+
         .input-bar {
             display:flex; padding:16px 20px; gap:10px;
             border-top:1px solid var(--glass-border);
@@ -184,7 +194,7 @@
 
 <script>
     // ── CONFIG ─────────────────────────────────────────────────────────────────
-    const BACKEND = 'http://127.0.0.1:8000';   // backend port
+    const BACKEND = 'https://vanshika-nova-novaagent.hf.space';   // single port, single backend
 
     // ── ELEMENTS ───────────────────────────────────────────────────────────────
     const statusDot  = document.getElementById('statusDot');
@@ -200,7 +210,7 @@
     // ── HEALTH CHECK ──────────────────────────────────────────────────────────
     async function checkHealth() {
         try {
-            const res  = await fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(4000) });
+            const res  = await fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(15000) });
             const data = await res.json();
             if (data.status === 'ok') {
                 statusDot.classList.remove('offline');
@@ -265,37 +275,37 @@
         const div = document.createElement('div');
         div.className = `message ${type === 'error' ? 'error' : type}`;
 
-        // Detect and render Mermaid diagrams
-        const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
-        let lastIndex = 0;
+        // Check for Mermaid diagrams
+        const mermaidRegex = /```mermaid\s*\n([\s\S]*?)\n```/g;
         let match;
-        let hasMermaid = false;
+        let lastIndex = 0;
+        let hasDiagram = false;
 
         while ((match = mermaidRegex.exec(content)) !== null) {
-            hasMermaid = true;
             // Add text before diagram
             if (match.index > lastIndex) {
-                const textNode = document.createElement('p');
-                textNode.textContent = content.slice(lastIndex, match.index);
+                const textNode = document.createTextNode(content.slice(lastIndex, match.index));
                 div.appendChild(textNode);
             }
-            // Add mermaid diagram
-            const mermaidDiv = document.createElement('div');
-            mermaidDiv.className = 'mermaid';
-            mermaidDiv.textContent = match[1].trim();
-            div.appendChild(mermaidDiv);
+
+            // Render diagram
+            const diagramDiv = document.createElement('div');
+            diagramDiv.className = 'mermaid-diagram';
+            diagramDiv.textContent = sanitizeMermaidContent(match[1].trim());
+            div.appendChild(diagramDiv);
+            hasDiagram = true;
+
             lastIndex = match.index + match[0].length;
         }
 
-        if (hasMermaid) {
-            // Add remaining text after last diagram
-            if (lastIndex < content.length) {
-                const textNode = document.createElement('p');
-                textNode.textContent = content.slice(lastIndex);
-                div.appendChild(textNode);
-            }
-            setTimeout(() => mermaid.run({ nodes: div.querySelectorAll('.mermaid') }), 100);
-        } else {
+        // Add remaining text
+        if (lastIndex < content.length) {
+            const textNode = document.createTextNode(content.slice(lastIndex));
+            div.appendChild(textNode);
+        }
+
+        // If no diagrams, just set textContent
+        if (!hasDiagram) {
             div.textContent = content;
         }
 
@@ -307,6 +317,33 @@
         }
 
         messagesEl.appendChild(div);
+
+        // Render Mermaid diagrams
+        if (hasDiagram) {
+            const diagrams = div.querySelectorAll('.mermaid-diagram');
+            diagrams.forEach(async (el) => {
+                try {
+                    const diagramId = `mermaid-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+                    const rendered = await mermaid.render(diagramId, el.textContent);
+                    el.innerHTML = rendered.svg ?? rendered;
+                } catch (err) {
+                    el.innerHTML = '';
+                    const errorMsg = document.createElement('div');
+                    errorMsg.textContent = 'Error rendering diagram: ' + err.message;
+                    errorMsg.style.marginBottom = '8px';
+                    const rawCode = document.createElement('pre');
+                    rawCode.textContent = el.textContent;
+                    rawCode.style.whiteSpace = 'pre-wrap';
+                    rawCode.style.background = 'rgba(255,255,255,0.06)';
+                    rawCode.style.padding = '10px';
+                    rawCode.style.borderRadius = '8px';
+                    rawCode.style.border = '1px solid rgba(255,255,255,0.12)';
+                    el.appendChild(errorMsg);
+                    el.appendChild(rawCode);
+                }
+            });
+        }
+
         scrollBottom();
         return div;
     }
@@ -321,6 +358,45 @@
 
     function scrollBottom() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function sanitizeMermaidContent(text) {
+        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+
+        if (!lines[0]?.match(/^(flowchart|graph)\s+(TD|LR|RL|BT)/i)) {
+            lines.unshift('flowchart TD');
+        }
+
+        const sanitizeLabel = label => label
+            .replace(/"/g, "'")
+            .replace(/\|/g, ' | ')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const sanitizeId = id => id.replace(/[^A-Za-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'node';
+
+        return lines.map(line => {
+            let sanitized = line
+                .replace(/-{3,}/g, '--')
+                .replace(/--\s*>\s*\|/g, '-->|')
+                .replace(/\|\s*>\s*/g, '| ')
+                .replace(/--\s*>/g, '-->')
+                .replace(/->\s*>/g, '->>')
+                .replace(/(\[[^\]]*\])\s*[A-Za-z0-9_]+(?=\s*(?:-->|->|-.->|$))/g, '$1')
+                .replace(/\]\s*[A-Za-z0-9_]+\s*$/g, ']');
+
+            sanitized = sanitized.replace(/([A-Za-z0-9_]+)\[([^\]]*)\]/g, (_, id, label) => {
+                return `${sanitizeId(id)}[${sanitizeLabel(label)}]`;
+            });
+
+            sanitized = sanitized.replace(/(^|\s)([A-Za-z0-9_]+)(?=\s*-->|\s*->|\s*-.->)/g, (_, prefix, id) => {
+                return `${prefix}${sanitizeId(id)}`;
+            });
+
+            return sanitized;
+        }).join('\n');
     }
 
     // ── EVENTS ────────────────────────────────────────────────────────────────
