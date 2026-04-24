@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    </script>
+    <style>
+        :root {
+            --navy-dark: #060918;
+            --navy-light: #0D1B4B;
+            --violet: #8B5CF6;
+            --rose: #F43F5E;
+            --cyan: #06B6D4;
+            --white: #FFFFFF;
+            --lavender: #C4B5FD;
+            --glass-bg: rgba(255,255,255,0.04);
+            --glass-border: rgba(255,255,255,0.10);
+            --user-bubble: rgba(139,92,246,0.25);
+            --nova-bubble: rgba(255,255,255,0.06);
+            --input-bg: rgba(255,255,255,0.06);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            background: linear-gradient(135deg, var(--navy-dark), var(--navy-light));
+            color: var(--white);
+            overflow: hidden;
+            position: relative;
+        }
+        .orb { position:absolute; border-radius:50%; filter:blur(100px); opacity:0.3; }
+        .orb.violet { background:var(--violet); width:400px; height:400px; top:10%; left:10%; }
+        .orb.rose   { background:var(--rose);   width:300px; height:300px; top:50%; right:10%; }
+        .orb.cyan   { background:var(--cyan);   width:350px; height:350px; bottom:10%; left:50%; }
+
+        .chat-container {
+            max-width: 700px; height:100vh; margin:0 auto;
+            display:flex; flex-direction:column;
+            position:relative; z-index:1;
+        }
+        .chat-card {
+            background:var(--glass-bg); backdrop-filter:blur(20px);
+            border:1px solid var(--glass-border); border-radius:16px;
+            margin:20px; flex:1; display:flex; flex-direction:column; overflow:hidden;
+            opacity:0; transform:scale(0.97);
+            animation:cardEnter 0.6s ease-out forwards;
+        }
+        @keyframes cardEnter { to { opacity:1; transform:scale(1); } }
+
+        .header {
+            display:flex; justify-content:space-between; align-items:center;
+            padding:20px; border-bottom:1px solid var(--glass-border);
+        }
+        .header h1 { font-size:24px; font-weight:600; }
+
+        .status { display:flex; align-items:center; gap:8px; }
+        .status-dot { width:12px; height:12px; border-radius:50%; background:#10B981; transition:background 0.3s; }
+        .status-dot.offline { background:#EF4444; }
+        .status-text { font-size:14px; color:var(--lavender); }
+
+        .customer-input { padding:16px 20px; border-bottom:1px solid var(--glass-border); }
+        .customer-input input {
+            width:100%; padding:12px 16px;
+            background:var(--input-bg); border:1px solid var(--glass-border);
+            border-radius:8px; color:var(--white); font-size:15px;
+            transition:border-color 0.2s;
+        }
+        .customer-input input::placeholder { color:var(--lavender); }
+        .customer-input input:focus { outline:none; border-color:var(--violet); }
+
+        .messages {
+            flex:1; overflow-y:auto; padding:20px;
+            display:flex; flex-direction:column; gap:14px;
+        }
+        .messages::-webkit-scrollbar { width:4px; }
+        .messages::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.4); border-radius:4px; }
+
+        .message {
+            max-width:75%; padding:12px 16px; border-radius:12px;
+            font-size:15px; line-height:1.5;
+            opacity:0; animation:msgIn 0.35s ease-out forwards;
+        }
+        .message.user {
+            background:var(--user-bubble); align-self:flex-end; text-align:right;
+            transform:translateY(16px) translateX(16px);
+            animation:msgInUser 0.35s ease-out forwards;
+        }
+        .message.nova {
+            background:var(--nova-bubble); align-self:flex-start;
+            border-left:3px solid var(--violet);
+            transform:translateY(16px) translateX(-16px);
+            animation:msgInNova 0.35s ease-out forwards;
+        }
+        .message.error {
+            background:rgba(239,68,68,0.2); align-self:flex-start;
+            border-left:3px solid #EF4444;
+            transform:translateY(16px) translateX(-16px);
+            animation:msgInNova 0.35s ease-out forwards;
+        }
+        @keyframes msgIn     { to { opacity:1; transform:translateY(0); } }
+        @keyframes msgInUser { to { opacity:1; transform:translateY(0) translateX(0); } }
+        @keyframes msgInNova { to { opacity:1; transform:translateY(0) translateX(0); } }
+
+        .message.typing {
+            background:var(--nova-bubble); align-self:flex-start;
+            border-left:3px solid var(--violet); opacity:1; animation:none; transform:none;
+        }
+        .typing-dots { display:flex; gap:5px; }
+        .typing-dots span {
+            width:8px; height:8px; border-radius:50%; background:var(--violet);
+            animation:pulse 1.4s infinite ease-in-out;
+        }
+        .typing-dots span:nth-child(2) { animation-delay:0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay:0.4s; }
+        @keyframes pulse {
+            0%,80%,100% { transform:scale(0.75); opacity:0.5; }
+            40%          { transform:scale(1);    opacity:1;   }
+        }
+
+        .sources {
+            margin-top:6px; font-size:12px; color:var(--lavender); opacity:0.7;
+        }
+
+        .mermaid-diagram {
+            margin: 10px 0;
+            padding: 10px;
+            background: var(--nova-bubble);
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .input-bar {
+            display:flex; padding:16px 20px; gap:10px;
+            border-top:1px solid var(--glass-border);
+        }
+        .input-bar input {
+            flex:1; padding:12px 16px;
+            background:var(--input-bg); border:1px solid var(--glass-border);
+            border-radius:8px; color:var(--white); font-size:15px;
+            transition:border-color 0.2s;
+        }
+        .input-bar input::placeholder { color:var(--lavender); }
+        .input-bar input:focus { outline:none; border-color:var(--violet); }
+
+        .send-btn {
+            padding:12px 22px;
+            background:linear-gradient(135deg, var(--violet), #7C3AED);
+            border:none; border-radius:8px; color:var(--white);
+            font-size:15px; font-weight:600; cursor:pointer;
+            transition:box-shadow 0.3s, transform 0.2s, opacity 0.2s;
+        }
+        .send-btn:hover:not(:disabled) {
+            box-shadow:0 0 22px rgba(139,92,246,0.65);
+            transform:translateY(-2px);
+        }
+        .send-btn:disabled { opacity:0.45; cursor:not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="orb violet"></div>
+    <div class="orb rose"></div>
+    <div class="orb cyan"></div>
+
+    <div class="chat-container">
+        <div class="chat-card">
+            <div class="header">
+                <h1>Nova — AI Support</h1>
+                <div class="status">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span class="status-text" id="statusText">Connecting…</span>
+                </div>
+            </div>
+
+            <div class="customer-input">
+                <input id="nameInput" type="text" placeholder="Enter your name to get started…" autocomplete="off">
+            </div>
+
+            <div class="messages" id="messages">
+                <div class="message nova">
+                    Hello! I'm Nova, NovaTech's AI support agent. Enter your name above and ask me anything about plans, billing, features, or account issues.
+                </div>
+            </div>
+
+            <div class="input-bar">
+                <input id="msgInput" type="text" placeholder="Type your message…" autocomplete="off">
+                <button class="send-btn" id="sendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // ── CONFIG ─────────────────────────────────────────────────────────────────
+    const BACKEND = 'http://127.0.0.1:8000';   // single port, single backend
+
+    // ── ELEMENTS ───────────────────────────────────────────────────────────────
+    const statusDot  = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const nameInput  = document.getElementById('nameInput');
+    const msgInput   = document.getElementById('msgInput');
+    const sendBtn    = document.getElementById('sendBtn');
+    const messagesEl = document.getElementById('messages');
+
+    let history  = [];
+    let waiting  = false;
+
+    // ── HEALTH CHECK ──────────────────────────────────────────────────────────
+    async function checkHealth() {
+        try {
+            const res  = await fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(4000) });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                statusDot.classList.remove('offline');
+                statusText.textContent = `Nova online · ${data.model ?? ''}`;
+            } else throw new Error();
+        } catch {
+            statusDot.classList.add('offline');
+            statusText.textContent = 'Backend offline — run uvicorn first';
+        }
+    }
+    window.addEventListener('load', checkHealth);
+
+    // ── SEND MESSAGE ──────────────────────────────────────────────────────────
+    async function sendMessage() {
+        const name    = nameInput.value.trim() || 'Customer';
+        const message = msgInput.value.trim();
+        if (!message || waiting) return;
+
+        waiting = true;
+        sendBtn.disabled = true;
+        msgInput.value = '';
+
+        addMessage('user', message);
+        history.push({ role: 'user', content: message });
+
+        const typingEl = addTyping();
+        scrollBottom();
+
+        try {
+            const res = await fetch(`${BACKEND}/ask`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, customer_name: name, history })
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail ?? `HTTP ${res.status}`);
+            }
+
+            const data = await res.json();
+            typingEl.remove();
+
+            addMessage('nova', data.response, data.sources ?? []);
+            history.push({ role: 'assistant', content: data.response });
+
+            // keep last 20 turns
+            if (history.length > 20) history = history.slice(-20);
+
+        } catch (err) {
+            typingEl.remove();
+            addMessage('error', `⚠️ ${err.message || 'Connection error — is Nova running?'}`);
+        }
+
+        waiting = false;
+        sendBtn.disabled = false;
+        scrollBottom();
+    }
+
+    // ── DOM HELPERS ───────────────────────────────────────────────────────────
+    function addMessage(type, content, sources = []) {
+        const div = document.createElement('div');
+        div.className = `message ${type === 'error' ? 'error' : type}`;
+
+        // Check for Mermaid diagrams
+        const mermaidRegex = /```mermaid\s*\n([\s\S]*?)\n```/g;
+        let match;
+        let lastIndex = 0;
+        let hasDiagram = false;
+
+        while ((match = mermaidRegex.exec(content)) !== null) {
+            // Add text before diagram
+            if (match.index > lastIndex) {
+                const textNode = document.createTextNode(content.slice(lastIndex, match.index));
+                div.appendChild(textNode);
+            }
+
+            // Render diagram
+            const diagramDiv = document.createElement('div');
+            diagramDiv.className = 'mermaid-diagram';
+            diagramDiv.textContent = sanitizeMermaidContent(match[1].trim());
+            div.appendChild(diagramDiv);
+            hasDiagram = true;
+
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Add remaining text
+        if (lastIndex < content.length) {
+            const textNode = document.createTextNode(content.slice(lastIndex));
+            div.appendChild(textNode);
+        }
+
+        // If no diagrams, just set textContent
+        if (!hasDiagram) {
+            div.textContent = content;
+        }
+
+        if (sources.length > 0) {
+            const src = document.createElement('div');
+            src.className = 'sources';
+            src.textContent = `Sources: ${sources.join(', ')}`;
+            div.appendChild(src);
+        }
+
+        messagesEl.appendChild(div);
+
+        // Render Mermaid diagrams
+        if (hasDiagram) {
+            const diagrams = div.querySelectorAll('.mermaid-diagram');
+            diagrams.forEach(async (el) => {
+                try {
+                    const diagramId = `mermaid-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+                    const rendered = await mermaid.render(diagramId, el.textContent);
+                    el.innerHTML = rendered.svg ?? rendered;
+                } catch (err) {
+                    el.innerHTML = '';
+                    const errorMsg = document.createElement('div');
+                    errorMsg.textContent = 'Error rendering diagram: ' + err.message;
+                    errorMsg.style.marginBottom = '8px';
+                    const rawCode = document.createElement('pre');
+                    rawCode.textContent = el.textContent;
+                    rawCode.style.whiteSpace = 'pre-wrap';
+                    rawCode.style.background = 'rgba(255,255,255,0.06)';
+                    rawCode.style.padding = '10px';
+                    rawCode.style.borderRadius = '8px';
+                    rawCode.style.border = '1px solid rgba(255,255,255,0.12)';
+                    el.appendChild(errorMsg);
+                    el.appendChild(rawCode);
+                }
+            });
+        }
+
+        scrollBottom();
+        return div;
+    }
+
+    function addTyping() {
+        const div = document.createElement('div');
+        div.className = 'message typing';
+        div.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+        messagesEl.appendChild(div);
+        return div;
+    }
+
+    function scrollBottom() {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function sanitizeMermaidContent(text) {
+        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+
+        if (!lines[0]?.match(/^(flowchart|graph)\s+(TD|LR|RL|BT)/i)) {
+            lines.unshift('flowchart TD');
+        }
+
+        const sanitizeLabel = label => label
+            .replace(/"/g, "'")
+            .replace(/\|/g, ' | ')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const sanitizeId = id => id.replace(/[^A-Za-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'node';
+
+        return lines.map(line => {
+            let sanitized = line
+                .replace(/-{3,}/g, '--')
+                .replace(/--\s*>\s*\|/g, '-->|')
+                .replace(/\|\s*>\s*/g, '| ')
+                .replace(/--\s*>/g, '-->')
+                .replace(/->\s*>/g, '->>')
+                .replace(/(\[[^\]]*\])\s*[A-Za-z0-9_]+(?=\s*(?:-->|->|-.->|$))/g, '$1')
+                .replace(/\]\s*[A-Za-z0-9_]+\s*$/g, ']');
+
+            sanitized = sanitized.replace(/([A-Za-z0-9_]+)\[([^\]]*)\]/g, (_, id, label) => {
+                return `${sanitizeId(id)}[${sanitizeLabel(label)}]`;
+            });
+
+            sanitized = sanitized.replace(/(^|\s)([A-Za-z0-9_]+)(?=\s*-->|\s*->|\s*-.->)/g, (_, prefix, id) => {
+                return `${prefix}${sanitizeId(id)}`;
+            });
+
+            return sanitized;
+        }).join('\n');
+    }
+
+    // ── EVENTS ────────────────────────────────────────────────────────────────
+    sendBtn.addEventListener('click', sendMessage);
+    msgInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+</script>
+</body>
+</html>
