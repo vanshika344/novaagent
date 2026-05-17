@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 import chromadb
 
-# ── SETUP ──────────────────────────────────────────────────────────────────────
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
@@ -18,7 +17,7 @@ if not api_key:
     sys.exit(1)
 
 groq_client = Groq(api_key=api_key)
-GROQ_MODEL = "llama-3.1-8b-instant"  # fast, free, great for support agents
+GROQ_MODEL = "llama-3.1-8b-instant" 
 
 app = FastAPI(title="Nova — NovaTech AI Support")
 app.add_middleware(
@@ -29,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── KNOWLEDGE BASE ─────────────────────────────────────────────────────────────
+
 kb_path = os.path.join(os.path.dirname(__file__), "knowledge_base.json")
 if not os.path.exists(kb_path):
     print("ERROR: knowledge_base.json not found")
@@ -40,7 +39,6 @@ with open(kb_path, "r", encoding="utf-8") as f:
 
 META_SECTIONS = {k for k in knowledge_base if k.startswith("tone_") or k.startswith("flow_")}
 
-# ── RAG INDEX ─────────────────────────────────────────────────────────────────
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 chroma_client = chromadb.Client()
 collection = chroma_client.create_collection(name="nova_kb")
@@ -51,8 +49,6 @@ for section, text in knowledge_base.items():
         collection.add(ids=[section], documents=[text], embeddings=[emb.tolist()])
 
 print(f"RAG index built: {collection.count()} sections indexed")
-
-# ── SYSTEM PROMPT ──────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are Nova, NovaTech's friendly AI support agent.
 
 RULES:
@@ -70,8 +66,6 @@ RULES:
 - Do not include HTML tags, Markdown, or raw `<` or `>` characters inside Mermaid node names or labels.
 - If Mermaid cannot be produced safely, return a concise text workflow instead of broken chart syntax.
 """
-
-# ── MODELS ─────────────────────────────────────────────────────────────────────
 class Message(BaseModel):
     role: str
     content: str
@@ -84,8 +78,6 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     response: str
     sources: List[str] = []
-
-# ── HELPERS ────────────────────────────────────────────────────────────────────
 def retrieve_context(query: str, n: int = 5) -> tuple[str, list[str]]:
     query_emb = embedding_model.encode(query).tolist()
     results = collection.query(query_embeddings=[query_emb], n_results=n)
@@ -101,8 +93,6 @@ def retrieve_context(query: str, n: int = 5) -> tuple[str, list[str]]:
     context = meta_text + "\n\n" + "\n".join(docs) if meta_text else "\n".join(docs)
     return context, ids
 
-
-# ── ROUTES ─────────────────────────────────────────────────────────────────────
 @app.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest):
     message = request.message.strip()
@@ -112,10 +102,7 @@ async def ask(request: AskRequest):
     customer_name = request.customer_name.strip() or "there"
     context, sources = retrieve_context(message)
 
-    # Build messages for Groq (OpenAI-compatible format)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-
-    # Add conversation history (last 10 turns)
     for msg in request.history[-10:]:
         messages.append({"role": msg.role, "content": msg.content})
 
